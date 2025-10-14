@@ -1,14 +1,18 @@
+/* ============================================================
+   LOGIN ESTILO INSTITUCIONAL - ESCALA DE GRISES (Luz & Vida)
+   ============================================================ */
 
-/* src/screens/login.css */
-:root {
-    --bg: #0f172a;
-    --card: #0b1220;
-    --muted: #94a3b8;
-    --text: #e2e8f0;
-    --primary: #22c55e;
-    --primary-700: #16a34a;
+   :root {
+    /* Paleta neutra inspirada en el sidebar */
+    --bg: #0b1220;
+    --card: #101726;
+    --panel: #131c2e;
+    --muted: #9ca3af;
+    --text: #e5e7eb;
+    --accent: #3b82f6;       /* azul institucional suave */
+    --accent-2: #2563eb;
     --error: #ef4444;
-    --ring: rgba(34, 197, 94, 0.35);
+    --ring: rgba(59, 130, 246, 0.35);
   }
   
   * { box-sizing: border-box; }
@@ -18,98 +22,167 @@
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
       "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
     color: var(--text);
-    background: radial-gradient(60rem 60rem at 20% 20%, #1e293b, #0b1220 60%);
+    background: radial-gradient(
+      circle at 30% 20%,
+      #111827 0%,
+      #0f172a 40%,
+      #0b1220 100%
+    );
+    background-attachment: fixed;
   }
   
-  .login__wrap {
-    min-height: 100dvh;
-    display: grid;
-    place-items: center;
-    padding: 2rem;
-  }
+  /* ===== Wrapper ===== */
+/* Fondo solo para la pantalla de login */
+.login__wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background: radial-gradient(
+    circle at 40% 25%,
+    #243b64 0%,
+    #0f1a30 60%,
+    #0b1220 100%
+  );
   
+  
+  
+  background-attachment: fixed;
+  color: var(--text);
+}
+
+  
+  /* ===== Card ===== */
   .login__card {
     width: 100%;
-    max-width: 480px;
-    background: linear-gradient(180deg, #0e1627, #0b1220);
-    border: 1px solid #1f2937;
+    max-width: 460px;
+    background: linear-gradient(180deg, #141c2b, #0d1422 90%);
+    border: 1px solid rgba(255,255,255,.05);
     border-radius: 18px;
-    padding: 2rem;
+    padding: 2.2rem;
     box-shadow:
       0 0 0 1px rgba(255,255,255,0.03) inset,
-      0 20px 60px rgba(0,0,0,0.45),
-      0 0 80px rgba(34, 197, 94, 0.08);
+      0 18px 48px rgba(0,0,0,0.5),
+      0 0 80px rgba(59,130,246,0.06);
     animation: pop 250ms ease-out;
+    backdrop-filter: blur(8px);
   }
   
-  @keyframes pop { from { transform: scale(.98); opacity: .8 } }
+  @keyframes pop { from { transform: scale(.98); opacity: .85 } }
   
+  /* ===== Header ===== */
   .login__header {
     text-align: center;
     margin-bottom: 1.5rem;
   }
+  
   .login__header img {
-    width: 56px; height: 56px; object-fit: cover;
-    filter: drop-shadow(0 6px 20px rgba(34, 197, 94, 0.35));
+    width: 86px;
+    height: 86px;
+    object-fit: contain;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 45%, #1e293b 0%, #0f172a 80%);
+    box-shadow:
+      0 6px 24px rgba(0,0,0,.5),
+      0 0 30px rgba(59,130,246,.25);
+    margin: 0 auto;
   }
-  .login__header h1 { margin: .75rem 0 .25rem; font-size: 1.5rem; }
+  
+  .login__header h1 {
+    margin: 1rem 0 .25rem;
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: var(--text);
+    letter-spacing: .5px;
+  }
+  
   .muted { color: var(--muted); }
   
+  /* ===== Formulario ===== */
   .login__form { display: grid; gap: 1rem; }
   
   .field span {
-    display: block; font-size: .9rem; color: var(--muted); margin-bottom: .35rem;
+    display: block;
+    font-size: .9rem;
+    color: var(--muted);
+    margin-bottom: .35rem;
   }
   
   .field input {
     width: 100%;
     padding: .9rem 1rem;
     border-radius: 12px;
-    border: 1px solid #233146;
+    border: 1px solid rgba(255,255,255,.08);
     outline: none;
-    background: #0a1220;
+    background: #0e1525;
     color: var(--text);
     transition: border-color .15s, box-shadow .15s, background .15s;
   }
   .field input::placeholder { color: #6b7280; }
   .field input:focus {
-    border-color: var(--primary);
+    border-color: var(--accent);
     box-shadow: 0 0 0 4px var(--ring);
-    background: #0a1323;
+    background: #111a2d;
   }
   
-  .password { display: grid; grid-template-columns: 1fr auto; gap: .5rem; align-items: center; }
+  /* ===== Botón mostrar/ocultar contraseña ===== */
+  .password {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: .5rem;
+    align-items: center;
+  }
+  
   button.ghost {
-    background: #0c1628;
-    border: 1px solid #22314a;
+    background: #101a2f;
+    border: 1px solid rgba(255,255,255,.08);
     border-radius: 12px;
     color: var(--muted);
     padding: 0 .9rem;
     height: 46px;
     cursor: pointer;
+    transition: all .15s ease;
   }
-  button.ghost:hover { color: var(--text); border-color: #2a3b58; }
+  button.ghost:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
   
+  /* ===== Botón principal ===== */
   button.primary {
-    background: linear-gradient(180deg, var(--primary), var(--primary-700));
-    color: #052e16;
+    background: linear-gradient(180deg, var(--accent), var(--accent-2));
+    color: #f8fafc;
     border: none;
     padding: .9rem 1rem;
     border-radius: 12px;
     font-weight: 700;
     cursor: pointer;
     letter-spacing: .2px;
-    box-shadow: 0 12px 26px rgba(34, 197, 94, .15);
+    box-shadow: 0 10px 25px rgba(59,130,246,.2);
+    transition: all .2s ease;
   }
-  button.primary:disabled { opacity: .7; cursor: not-allowed; }
+  button.primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 30px rgba(59,130,246,.28);
+  }
+  button.primary:disabled {
+    opacity: .7;
+    cursor: not-allowed;
+  }
   
+  /* ===== Mensajes ===== */
   .error {
-    background: rgba(239, 68, 68, .08);
+    background: rgba(239,68,68,.08);
     color: #fecaca;
-    border: 1px solid rgba(239, 68, 68, .35);
+    border: 1px solid rgba(239,68,68,.35);
     padding: .75rem 1rem;
     border-radius: 12px;
   }
   
-  .login__footer { margin-top: 1rem; text-align: center; }
+  .login__footer {
+    margin-top: 1.2rem;
+    text-align: center;
+    font-size: .9rem;
+    color: var(--muted);
+  }
   

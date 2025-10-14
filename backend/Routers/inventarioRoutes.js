@@ -1,16 +1,17 @@
-// backend/Routers/inventarioRoutes.js
 import { Router } from "express";
+import { requireAuth } from "../middlewares/requireAuth.js";
+import {
+  listarInventario,
+  crearItem,
+  borrarItem,
+  ajustarCantidad,
+} from "../controllers/inventario.controller.js";
 
 const router = Router();
 
-// Ejemplo de endpoint: listar inventario
-router.get("/", (req, res) => {
-  res.json({ message: "Inventario funcionando ✅" });
-});
-
-// Aquí podrás agregar más endpoints CRUD después:
-// router.post("/", (req, res) => {...});
-// router.put("/:id", (req, res) => {...});
-// router.delete("/:id", (req, res) => {...});
+router.get("/", requireAuth, listarInventario);
+router.post("/", requireAuth, crearItem);
+router.delete("/:id", requireAuth, borrarItem);
+router.patch("/:id/ajustar", requireAuth, ajustarCantidad);
 
 export default router;
