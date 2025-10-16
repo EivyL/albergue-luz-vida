@@ -33,6 +33,8 @@ app.use("/api/stats", statsRoutes);
 app.use("/api/habitaciones", habitacionesRouter);
 app.use("/api/inventario", inventarioCocinaRoutes);
 app.use("/api/bodega", bodegaRouter); 
+app.get('/health', (_req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
+
 
 try {
   await sequelize.authenticate();
