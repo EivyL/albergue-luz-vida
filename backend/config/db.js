@@ -2,26 +2,15 @@ import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
 dotenv.config();
 
-const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASS,
-  {
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT) || 5432,
-    dialect: process.env.DB_DIALECT || "postgres",
-    logging: false,
-    pool: {
-      max: 10,      // suficiente para dev
-      min: 0,
-      idle: 10000,  // libera conexiones ociosas
-      acquire: 20000, // evita esperas eternas
-      evict: 1000,
-    },
-    dialectOptions: {
-      // útil en redes inestables
-      keepAlive: true,
-    },
-  }
-);
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  dialect: "postgres",
+  logging: false,
+  pool: { max: 8, min: 0, idle: 10000, acquire: 20000, evict: 1000 },
+  dialectOptions: {
+    keepAlive: true,
+    // ❌ NO forzar SSL cuando usas la URL interna de Render
+    // ssl: { require: true }
+  },
+});
+
 export default sequelize;
