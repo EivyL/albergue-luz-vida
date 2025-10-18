@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed:admin": "node scripts/seedAdmin.js"
+    "seed:admin": "node scripts/seedAdmin.js",
+    "postdeploy": "sequelize-cli db:migrate --config config/config.json"
+    
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -24,4 +26,6 @@
     "nodemon": "^3.1.10",
     "sequelize-cli": "^6.6.3"
   }
+
+  
 }
