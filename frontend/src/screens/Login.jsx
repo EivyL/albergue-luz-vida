@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import "./login.css";
+import "./Login.css";
 
 export default function Login() {
   const { login, loading } = useAuth();
