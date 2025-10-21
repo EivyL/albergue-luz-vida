@@ -5,7 +5,7 @@ if (!base) console.warn("⚠️ VITE_API_URL no está definida");
 
 const api = axios.create({
   baseURL: `${base}/api`,
-  withCredentials: true,
+  withCredentials: false,
 });
 
 api.interceptors.request.use((config) => {
