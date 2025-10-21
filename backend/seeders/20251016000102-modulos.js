@@ -1,17 +1,62 @@
-'use strict';
-
-module.exports = {
-  async up(queryInterface) {
-    const now = new Date();
-    await queryInterface.bulkInsert('modulos', [
-      { clave: 'dashboard',      nombre: 'Dashboard',      descripcion: 'Inicio',            created_at: now, updated_at: now },
-      { clave: 'beneficiarios',  nombre: 'Beneficiarios',  descripcion: 'Gestión de fichas', created_at: now, updated_at: now },
-      { clave: 'usuarios',       nombre: 'Usuarios',       descripcion: 'Gestión de usuarios', created_at: now, updated_at: now },
-      { clave: 'roles',          nombre: 'Roles',          descripcion: 'Roles y permisos',  created_at: now, updated_at: now },
-      { clave: 'reportes',       nombre: 'Reportes',       descripcion: 'Reportes y export', created_at: now, updated_at: now }
-    ]);
-  },
-  async down(queryInterface) {
-    await queryInterface.bulkDelete('modulos', { clave: ['dashboard','beneficiarios','usuarios','roles','reportes'] });
-  }
-};
+// ESM seeder: insertar módulos base
+export default {
+    up: async (queryInterface, Sequelize) => {
+      const t = await queryInterface.sequelize.transaction();
+      try {
+        const now = new Date();
+  
+        // Ajusta esta lista a tu proyecto
+        const modKeys = [
+          "usuarios",
+          "beneficiarios",
+          "produccion",
+          "stats",
+          "habitaciones",
+          "inventario",
+          "bodega",
+        ];
+  
+        const toTitle = s => s.charAt(0).toUpperCase() + s.slice(1);
+  
+        const modulosData = modKeys.map(k => ({
+          clave: k,
+          nombre: toTitle(k),
+          descripcion: null,
+          created_at: now,
+          updated_at: now,
+        }));
+  
+        await queryInterface.bulkInsert("modulos", modulosData, {
+          transaction: t,
+          ignoreDuplicates: true, // ON CONFLICT DO NOTHING en PG
+        });
+  
+        await t.commit();
+      } catch (e) {
+        await t.rollback();
+        throw e;
+      }
+    },
+  
+    down: async (queryInterface, Sequelize) => {
+      const t = await queryInterface.sequelize.transaction();
+      try {
+        await queryInterface.bulkDelete("modulos", {
+          clave: [
+            "usuarios",
+            "beneficiarios",
+            "produccion",
+            "stats",
+            "habitaciones",
+            "inventario",
+            "bodega",
+          ],
+        }, { transaction: t });
+        await t.commit();
+      } catch (e) {
+        await t.rollback();
+        throw e;
+      }
+    },
+  };
+  

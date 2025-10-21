@@ -1,98 +1,121 @@
-// ESM migration: export default { up, down }
+// Carga inicial de roles, módulos y permisos (role_modulos)
+// ESM: export default { up, down }
 export default {
-    async up(queryInterface, Sequelize) {
-      // ===== roles =====
-      await queryInterface.createTable("roles", {
-        id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
-        nombre: { type: Sequelize.STRING(50), allowNull: false, unique: true },
-        descripcion: { type: Sequelize.STRING(200) },
-        created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn("now") },
-        updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn("now") },
-      });
+    up: async (queryInterface, Sequelize) => {
+      const t = await queryInterface.sequelize.transaction();
+      try {
+        const now = new Date();
   
-      // ===== modulos =====
-      await queryInterface.createTable("modulos", {
-        id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
-        clave: { type: Sequelize.STRING(60), allowNull: false, unique: true }, // slug: 'beneficiarios', 'usuarios', etc.
-        nombre: { type: Sequelize.STRING(100), allowNull: false },
-        descripcion: { type: Sequelize.STRING(200) },
-        created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn("now") },
-        updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn("now") },
-      });
+        // 1) Roles base
+        const rolesData = [
+          { nombre: "Admin",    descripcion: "Administrador", created_at: now, updated_at: now },
+          { nombre: "Operador", descripcion: "Operador",      created_at: now, updated_at: now },
+        ];
+        await queryInterface.bulkInsert("roles", rolesData, {
+          transaction: t,
+          ignoreDuplicates: true, // Postgres → ON CONFLICT DO NOTHING
+        });
   
-      // ===== permisos por rol+módulo =====
-      await queryInterface.createTable("role_modulos", {
-        role_id: {
-          type: Sequelize.INTEGER,
-          allowNull: false,
-          references: { model: "roles", key: "id" },
-          onUpdate: "CASCADE",
-          onDelete: "CASCADE",
-        },
-        modulo_id: {
-          type: Sequelize.INTEGER,
-          allowNull: false,
-          references: { model: "modulos", key: "id" },
-          onUpdate: "CASCADE",
-          onDelete: "CASCADE",
-        },
-        can_create: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: false },
-        can_read: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
-        can_update: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: false },
-        can_delete: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: false },
-        created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn("now") },
-        updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn("now") },
-      });
+        // 2) Módulos que usas en el proyecto (ajusta si quieres)
+        const modKeys = [
+          "usuarios",
+          "beneficiarios",
+          "produccion",
+          "stats",
+          "habitaciones",
+          "inventario",
+          "bodega",
+        ];
+        const toTitle = s => s.charAt(0).toUpperCase() + s.slice(1);
   
-      await queryInterface.addConstraint("role_modulos", {
-        fields: ["role_id", "modulo_id"],
-        type: "unique",
-        name: "ux_role_modulo",
-      });
+        const modulosData = modKeys.map(k => ({
+          clave: k,
+          nombre: toTitle(k),
+          descripcion: null,
+          created_at: now,
+          updated_at: now,
+        }));
   
-      // ===== usuarios =====
-      await queryInterface.createTable("usuarios", {
-        id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
-        nombre: { type: Sequelize.STRING(120), allowNull: false },
-        correo: { type: Sequelize.STRING(150), allowNull: false, unique: true },
-        contrasena: { type: Sequelize.STRING(255), allowNull: false },
-        rol_id: {
-          type: Sequelize.INTEGER,
-          allowNull: false,
-          references: { model: "roles", key: "id" },
-          onUpdate: "CASCADE",
-          onDelete: "RESTRICT",
-        },
-        activo: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
-        ultimo_login: { type: Sequelize.DATE },
-        created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn("now") },
-        updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn("now") },
-      });
+        await queryInterface.bulkInsert("modulos", modulosData, {
+          transaction: t,
+          ignoreDuplicates: true,
+        });
   
-      // ===== beneficiarios =====
-      await queryInterface.createTable("beneficiarios", {
-        id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
-        dpi: { type: Sequelize.STRING(20) },
-        nombre: { type: Sequelize.STRING(120), allowNull: false },
-        apellido: { type: Sequelize.STRING(120), allowNull: false },
-        fecha_nacimiento: { type: Sequelize.DATEONLY },
-        telefono: { type: Sequelize.STRING(25) },
-        direccion: { type: Sequelize.STRING(200) },
-        created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn("now") },
-        updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.fn("now") },
-      });
+        // 3) IDs reales de roles y módulos
+        const [rolesRows] = await queryInterface.sequelize.query(
+          `SELECT id, nombre FROM roles WHERE nombre IN ('Admin','Operador')`,
+          { transaction: t }
+        );
+        const [modsRows] = await queryInterface.sequelize.query(
+          `SELECT id, clave FROM modulos WHERE clave IN (${modKeys.map(k => `'${k}'`).join(",")})`,
+          { transaction: t }
+        );
   
-      // Índices útiles
-      await queryInterface.addIndex("beneficiarios", ["dpi"], { name: "ix_beneficiarios_dpi" });
+        const idByRole = Object.fromEntries(rolesRows.map(r => [r.nombre, r.id]));
+        const idByMod  = Object.fromEntries(modsRows.map(m => [m.clave, m.id]));
+  
+        // 4) Permisos por rol
+        // Admin: todo true
+        const adminPerms = modKeys.map(k => ({
+          role_id: idByRole.Admin,
+          modulo_id: idByMod[k],
+          can_create: true,
+          can_read:   true,
+          can_update: true,
+          can_delete: true,
+          created_at: now,
+          updated_at: now,
+        }));
+  
+        // Operador: solo lectura por defecto (ajusta si necesitas)
+        const operPerms = modKeys.map(k => ({
+          role_id: idByRole.Operador,
+          modulo_id: idByMod[k],
+          can_create: false,
+          can_read:   true,
+          can_update: false,
+          can_delete: false,
+          created_at: now,
+          updated_at: now,
+        }));
+  
+        const roleModulosData = [...adminPerms, ...operPerms];
+  
+        await queryInterface.bulkInsert("role_modulos", roleModulosData, {
+          transaction: t,
+          ignoreDuplicates: true, // evita chocar con ux_role_modulo
+        });
+  
+        await t.commit();
+      } catch (e) {
+        await t.rollback();
+        throw e;
+      }
     },
   
-    async down(queryInterface) {
-      await queryInterface.removeIndex("beneficiarios", "ix_beneficiarios_dpi");
-      await queryInterface.dropTable("beneficiarios");
-      await queryInterface.dropTable("usuarios");
-      await queryInterface.dropTable("role_modulos");
-      await queryInterface.dropTable("modulos");
-      await queryInterface.dropTable("roles");
+    down: async (queryInterface, Sequelize) => {
+      const t = await queryInterface.sequelize.transaction();
+      try {
+        // elimina solo lo que este seeder insertó
+        await queryInterface.bulkDelete("role_modulos", null, { transaction: t });
+        await queryInterface.bulkDelete("modulos", {
+          clave: [
+            "usuarios",
+            "beneficiarios",
+            "produccion",
+            "stats",
+            "habitaciones",
+            "inventario",
+            "bodega",
+          ],
+        }, { transaction: t });
+        await queryInterface.bulkDelete("roles", { nombre: ["Admin","Operador"] }, { transaction: t });
+  
+        await t.commit();
+      } catch (e) {
+        await t.rollback();
+        throw e;
+      }
     },
   };
   
