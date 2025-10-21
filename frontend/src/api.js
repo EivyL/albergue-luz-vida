@@ -1,8 +1,12 @@
 import axios from "axios";
+
+const base = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, ""); // quita '/' final
+if (!base) console.warn("⚠️ VITE_API_URL no está definida");
+
 const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL}/api`, // <- usa la URL absoluta
-  withCredentials: true, 
-});        
+  baseURL: `${base}/api`,
+  withCredentials: true,
+});
 
 api.interceptors.request.use((config) => {
   const t = localStorage.getItem("token");
