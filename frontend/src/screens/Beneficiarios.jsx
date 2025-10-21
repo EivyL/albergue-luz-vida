@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { useAuth } from "../context/AuthContext";
 
-/* ================ Helpers UI ================= */
+/* ===== UI helpers ===== */
 const PillTab = ({ active, children, onClick }) => (
   <button
     onClick={onClick}
@@ -30,9 +30,10 @@ const Field = ({ label, children }) => (
   </div>
 );
 
-/* ================ Utils ================= */
+/* ===== Utils ===== */
 const today = () => new Date().toISOString().slice(0, 10);
 const toIsoDate = (v) => (v ? new Date(v).toISOString().slice(0, 10) : "");
+const monthKey = (v) => (v ? toIsoDate(v).slice(0, 7) : "");
 const calcAge = (birth) => {
   if (!birth) return "—";
   const d = new Date(birth);
@@ -44,7 +45,21 @@ const calcAge = (birth) => {
   return age < 0 || age > 130 ? "—" : age;
 };
 
-/* ================ Componente ================= */
+/* Últimos N meses como opciones YYYY-MM */
+const buildMonthOptions = (n = 18) => {
+  const out = [{ value: "ALL", label: "Todos los meses" }];
+  const d = new Date();
+  d.setDate(1);
+  for (let i = 0; i < n; i++) {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const label = d.toLocaleString(undefined, { month: "long", year: "numeric" });
+    out.push({ value: `${yyyy}-${mm}`, label: label[0].toUpperCase() + label.slice(1) });
+    d.setMonth(d.getMonth() - 1);
+  }
+  return out;
+};
+
 export default function Beneficiarios() {
   const { user } = useAuth();
   const userId = user?.id_usuario ?? user?.id ?? null;
@@ -55,6 +70,11 @@ export default function Beneficiarios() {
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(10);
   const [page, setPage] = useState(1);
+  const [selMonth, setSelMonth] = useState("ALL");      // YYYY-MM | ALL
+  const monthOptions = useMemo(() => buildMonthOptions(24), []);
+
+  /* vista: tabla | cards | compact */
+  const [view, setView] = useState("tabla");
 
   /* datos */
   const [items, setItems] = useState([]);
@@ -73,29 +93,39 @@ export default function Beneficiarios() {
   });
   const [editing, setEditing] = useState(null);
 
-  /* imprenta (contenedor) */
   const printRef = useRef(null);
 
-  /* carga */
+  /* ===== Carga ===== */
   const cargar = async () => {
     setLoading(true);
     try {
       const params = {
         q, page, limit, sexo,
-        estado: estado === "TODOS" ? undefined : (estado === "ACTIVOS")
+        estado: estado === "TODOS" ? undefined : (estado === "ACTIVOS"),
+        mes: selMonth !== "ALL" ? selMonth : undefined, // si tu API lo soporta
       };
       const { data } = await api.get("beneficiarios", { params });
-      setItems(data.items || []);
-      setTotal(data.total || 0);
+
+      // Normaliza items/total
+      const srcItems = data.items || data || [];
+      let list = Array.isArray(srcItems) ? srcItems : [];
+      // Filtro por mes en el cliente (por si el backend aún no filtra)
+      if (selMonth !== "ALL") {
+        list = list.filter((r) => monthKey(r.fecha_ingreso) === selMonth);
+      }
+      setItems(list);
+      setTotal(data.total ?? list.length ?? 0);
     } catch (e) {
       console.error(e);
+      setItems([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
   };
-  useEffect(() => { cargar(); }, [sexo, estado, q, page, limit]);
+  useEffect(() => { cargar(); }, [sexo, estado, q, page, limit, selMonth]);
 
-  /* acciones CRUD */
+  /* ===== CRUD ===== */
   const onChange = (e) => {
     const { name, type, checked, value } = e.target;
     setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
@@ -113,7 +143,6 @@ export default function Beneficiarios() {
   };
 
   const save = async () => {
-    // validaciones mínimas y fechas seguras (evitar "Invalid date")
     if (!form.nombre || !form.apellido) return alert("Nombre y apellido son requeridos.");
     const payload = {
       ...form,
@@ -170,22 +199,22 @@ export default function Beneficiarios() {
   /* KPIs */
   const kpis = useMemo(() => {
     const activos = items.filter((x) => x.estado).length;
-    return {
-      total: total,
-      activos,
-      inactivos: total - activos < 0 ? 0 : total - activos
-    };
+    return { total, activos, inactivos: Math.max(0, total - activos) };
   }, [items, total]);
 
   const pages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
 
-  /* imprimir listado */
+  /* ===== Impresión por mes ===== */
   const printList = () => {
+    const monthLabel = selMonth === "ALL"
+      ? "Todos los meses"
+      : new Date(selMonth + "-01").toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
     const html = `
 <!doctype html><html>
 <head>
 <meta charset="utf-8"/>
-<title>Listado de Beneficiarios</title>
+<title>Listado de Beneficiarios — ${monthLabel}</title>
 <style>
   body{font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin:24px;}
   h1{margin:0 0 12px 0; font-size:18px}
@@ -197,7 +226,9 @@ export default function Beneficiarios() {
 </head>
 <body>
   <h1>Listado de Beneficiarios</h1>
-  <div class="muted">Sexo: ${sexo === "H" ? "Hombres" : "Mujeres"} · Estado: ${estado.toLowerCase()}</div>
+  <div class="muted">
+    Mes: ${monthLabel} · Sexo: ${sexo === "H" ? "Hombres" : "Mujeres"} · Estado: ${estado.toLowerCase()}
+  </div>
   <br/>
   <table>
     <thead><tr>
@@ -227,6 +258,7 @@ export default function Beneficiarios() {
     w.document.close();
   };
 
+  /* ===== Render ===== */
   return (
     <div className="container section" ref={printRef}>
       {/* Encabezado */}
@@ -247,10 +279,23 @@ export default function Beneficiarios() {
               <option value="TODOS">Todos</option>
             </select>
 
+            {/* Mes */}
+            <select
+              className="select"
+              value={selMonth}
+              onChange={(e) => { setSelMonth(e.target.value); setPage(1); }}
+              style={{ width: 220 }}
+              title="Filtra por mes de ingreso"
+            >
+              {monthOptions.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+
             {/* Buscar */}
             <input
               className="input"
-              style={{ minWidth: 320 }}
+              style={{ minWidth: 260 }}
               placeholder="Buscar por nombre, apellido o documento…"
               value={q}
               onChange={(e) => { setQ(e.target.value); setPage(1); }}
@@ -261,8 +306,9 @@ export default function Beneficiarios() {
               {[10, 20, 50].map((n) => <option key={n} value={n}>{n}/pág</option>)}
             </select>
 
-            {/* Imprimir */}
-            <button className="btn btn-outline" onClick={printList}>🖨️ Imprimir listado</button>
+
+            {/* Imprimir (por mes) */}
+            <button className="btn btn-outline" onClick={printList}>🖨️ Imprimir mes</button>
           </div>
         </div>
 
@@ -275,7 +321,7 @@ export default function Beneficiarios() {
         </div>
       </div>
 
-      {/* Registro rápido (Card elevada) */}
+      {/* Registro rápido */}
       <div className="card elevate">
         <div className="toolbar" style={{ justifyContent: "space-between" }}>
           <div className="h2">Registro rápido</div>
@@ -336,64 +382,122 @@ export default function Beneficiarios() {
         </div>
       </div>
 
-      {/* Tabla de resultados */}
+      {/* Resultados */}
       <div className="panel" style={{ padding: 0 }}>
         <div style={{ padding: 12, borderBottom: "1px solid var(--lv-border)" }}>
           <div className="h2">Listado</div>
         </div>
 
-        <div style={{ overflow: "auto" }}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Nombre</th>
-                <th>Sexo</th>
-                <th>Edad</th>
-                <th>Documento</th>
-                <th>Teléfono</th>
-                <th>Programa</th>
-                <th>Ingreso</th>
-                <th>Estado</th>
-                <th style={{ textAlign: "right" }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!loading && items.map((r, i) => (
-                <tr key={r.id_beneficiario}>
-                  <td>{(page - 1) * limit + i + 1}</td>
-                  <td>
-                    <div style={{ fontWeight: 900 }}>{r.nombre} {r.apellido}</div>
-                    <div className="muted" style={{ fontSize: 12 }}>{r.direccion || "—"}</div>
-                  </td>
-                  <td>{r.sexo === "H" ? "Hombre" : "Mujer"}</td>
-                  <td>{calcAge(r.fecha_nacimiento)}</td>
-                  <td>{r.documento || "—"}</td>
-                  <td>{r.telefono || "—"}</td>
-                  <td>{r.programa || "—"}</td>
-                  <td>{toIsoDate(r.fecha_ingreso) || "—"}</td>
-                  <td>
-                    {r.estado
-                      ? <span className="badge badge-success">Activo</span>
-                      : <span className="badge badge-warning">Inactivo</span>}
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    <div className="toolbar">
-                      <button className="btn btn-ghost" onClick={() => onEdit(r)}>Editar</button>
-                      <button className="btn btn-danger" onClick={() => onDelete(r)}>Eliminar</button>
-                    </div>
-                  </td>
+        {/* Vista dinámica */}
+        {view === "tabla" && (
+          <div style={{ overflow: "auto" }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Nombre</th>
+                  <th>Sexo</th>
+                  <th>Edad</th>
+                  <th>Documento</th>
+                  <th>Teléfono</th>
+                  <th>Programa</th>
+                  <th>Ingreso</th>
+                  <th>Estado</th>
+                  <th style={{ textAlign: "right" }}>Acciones</th>
                 </tr>
-              ))}
-              {loading && (
-                <tr><td colSpan={10} className="muted">Cargando…</td></tr>
-              )}
-              {!loading && items.length === 0 && (
-                <tr><td colSpan={10} className="muted">Sin resultados</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {!loading && items.map((r, i) => (
+                  <tr key={r.id_beneficiario}>
+                    <td>{(page - 1) * limit + i + 1}</td>
+                    <td>
+                      <div style={{ fontWeight: 900 }}>{r.nombre} {r.apellido}</div>
+                      <div className="muted" style={{ fontSize: 12 }}>{r.direccion || "—"}</div>
+                    </td>
+                    <td>{r.sexo === "H" ? "Hombre" : "Mujer"}</td>
+                    <td>{calcAge(r.fecha_nacimiento)}</td>
+                    <td>{r.documento || "—"}</td>
+                    <td>{r.telefono || "—"}</td>
+                    <td>{r.programa || "—"}</td>
+                    <td>{toIsoDate(r.fecha_ingreso) || "—"}</td>
+                    <td>
+                      {r.estado
+                        ? <span className="badge badge-success">Activo</span>
+                        : <span className="badge badge-warning">Inactivo</span>}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <div className="toolbar">
+                        <button className="btn btn-ghost" onClick={() => onEdit(r)}>Editar</button>
+                        <button className="btn btn-danger" onClick={() => onDelete(r)}>Eliminar</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {loading && (<tr><td colSpan={10} className="muted">Cargando…</td></tr>)}
+                {!loading && items.length === 0 && (<tr><td colSpan={10} className="muted">Sin resultados</td></tr>)}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {view === "cards" && (
+          <div style={{ display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", padding:12 }}>
+            {loading && <div className="muted">Cargando…</div>}
+            {!loading && items.map((r, i) => (
+              <div key={r.id_beneficiario} className="card" style={{ padding:12 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div style={{ fontWeight:900 }}>{r.nombre} {r.apellido}</div>
+                  <span className="badge" style={{ fontWeight:800 }}>
+                    {r.sexo === "H" ? "H" : "M"}
+                  </span>
+                </div>
+                <div className="muted" style={{ fontSize:12, marginTop:6 }}>
+                  Doc: {r.documento || "—"} · Programa: {r.programa || "—"}
+                </div>
+                <div style={{ marginTop:8, display:"flex", gap:8 }}>
+                  {r.estado
+                    ? <span className="badge badge-success">Activo</span>
+                    : <span className="badge badge-warning">Inactivo</span>}
+                  <span className="badge">{toIsoDate(r.fecha_ingreso) || "—"}</span>
+                </div>
+                <div className="toolbar" style={{ marginTop:10, justifyContent:"flex-end" }}>
+                  <button className="btn btn-ghost" onClick={() => onEdit(r)}>Editar</button>
+                  <button className="btn btn-danger" onClick={() => onDelete(r)}>Eliminar</button>
+                </div>
+              </div>
+            ))}
+            {!loading && items.length === 0 && <div className="muted">Sin resultados</div>}
+          </div>
+        )}
+
+        {view === "compact" && (
+          <div style={{ padding:12 }}>
+            {loading && <div className="muted">Cargando…</div>}
+            {!loading && items.length === 0 && <div className="muted">Sin resultados</div>}
+            {!loading && items.map((r,i) => (
+              <div key={r.id_beneficiario}
+                   style={{ display:"grid", gridTemplateColumns:"56px 1fr auto",
+                            gap:10, alignItems:"center", padding:"8px 10px",
+                            borderBottom:"1px solid var(--lv-border)" }}>
+                <div style={{ fontWeight:800, color:"var(--lv-text-muted)" }}>
+                  {(page - 1) * limit + i + 1}
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontWeight:800, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                    {r.nombre} {r.apellido} <span className="muted">• {r.programa || "—"}</span>
+                  </div>
+                  <div className="muted" style={{ fontSize:12 }}>
+                    {r.sexo === "H" ? "Hombre" : "Mujer"} · {calcAge(r.fecha_nacimiento)} · Ingreso: {toIsoDate(r.fecha_ingreso) || "—"}
+                  </div>
+                </div>
+                <div className="toolbar">
+                  <button className="btn btn-ghost" onClick={() => onEdit(r)}>Editar</button>
+                  <button className="btn btn-danger" onClick={() => onDelete(r)}>Eliminar</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Paginación */}
         <div className="toolbar" style={{ padding: 12, justifyContent: "space-between" }}>
