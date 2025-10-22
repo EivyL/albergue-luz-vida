@@ -1,39 +1,61 @@
-import dotenv from "dotenv";
-dotenv.config();
+// backend/scripts/seedAdmin.js
+import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { sequelize } from "../config/db.js";
+import sequelize from "../config/db.js";   // 👈 import default (no llaves)
 import Usuario from "../Models/Usuario.js";
 
-const run = async () => {
+(async () => {
+  const correo = "admin@albergue.test";
+  const nombre = "admin";
+  const plain  = "Admin123*";
+
   try {
     await sequelize.authenticate();
-    await sequelize.sync();
 
-    const correo = "admin@albergue.test";
-    const nombre = "admin";
-    const plain = "Admin123*";
-
-    const exist = await Usuario.findOne({ where: { correo } });
-    if (exist) {
-      console.log("✅ Admin ya existe:", correo);
-      process.exit(0);
-    }
-
+    // hash de la contraseña
     const hash = await bcrypt.hash(plain, 10);
-    const user = await Usuario.create({
-      nombre_usuario: nombre,
-      correo,
-      contrasena: hash,
-      rol: "ADMIN",
-      estado: true
-    });
 
-    console.log("✅ Usuario admin creado:", { id: user.id_usuario, correo, pass: plain });
-    process.exit(0);
+    // busca por correo
+    let user = await Usuario.findOne({ where: { correo } });
+
+    if (!user) {
+      // crea admin (ajusta rol/rol_id según tu modelo)
+      user = await Usuario.create({
+        nombre_usuario: nombre,
+        correo,
+        contrasena: hash,
+        // Si tu modelo usa ENUM 'rol':
+        rol: "ADMIN",
+        // Si tu modelo usa FK 'rol_id', descomenta:
+        // rol_id: 1,
+        estado: true,
+      });
+
+      console.log("✅ Usuario admin creado:", {
+        id: user.id_usuario ?? user.id,
+        correo,
+        pass: plain,
+      });
+    } else {
+      // actualiza password/estado y asegura rol
+      user.contrasena = hash;
+      user.estado = true;
+
+      if ("rol" in user && !user.rol) user.rol = "ADMIN";
+      if ("rol_id" in user && !user.rol_id) user.rol_id = 1;
+
+      await user.save();
+
+      console.log("✅ Usuario admin actualizado:", {
+        id: user.id_usuario ?? user.id,
+        correo,
+      });
+    }
   } catch (e) {
     console.error("❌ Error seed:", e);
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    // cierra la conexión antes de salir
+    try { await sequelize.close(); } catch {}
   }
-};
-
-run();
+})();
