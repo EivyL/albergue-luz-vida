@@ -84,11 +84,9 @@ export default function App() {
               path="/admin/usuarios"
               element={
                 <Private>
-                  <RequireRole roles={["ADMIN"]}>
                     <DashboardLayout>
                       <Users />
                     </DashboardLayout>
-                  </RequireRole>
                 </Private>
               }
             />
@@ -98,11 +96,9 @@ export default function App() {
               path="/beneficiarios"
               element={
                 <Private>
-                  <RequireRole roles={["ADMIN", "COORD", "TSOCIAL"]}>
                     <DashboardLayout>
                       <Beneficiarios />
                     </DashboardLayout>
-                  </RequireRole>
                 </Private>
               }
             />
@@ -112,11 +108,9 @@ export default function App() {
               path="/habitaciones"
               element={
                 <Private>
-                  <RequireRole roles={["ADMIN", "COORD", "TSOCIAL"]}>
                     <DashboardLayout>
                       <Habitaciones />
                     </DashboardLayout>
-                  </RequireRole>
                 </Private>
               }
             />
@@ -126,11 +120,9 @@ export default function App() {
               path="/habitaciones/lista"
               element={
                 <Private>
-                  <RequireRole roles={["ADMIN", "COORD", "TSOCIAL"]}>
                     <DashboardLayout>
                       <HabitacionesLista />
                     </DashboardLayout>
-                  </RequireRole>
                 </Private>
               }
             />
@@ -140,11 +132,9 @@ export default function App() {
               path="/inventario"
               element={
                 <Private>
-                  <RequireRole roles={["ADMIN", "INV"]}>
                     <DashboardLayout>
                       <Inventario />
                     </DashboardLayout>
-                  </RequireRole>
                 </Private>
               }
             />

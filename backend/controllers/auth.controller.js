@@ -1,6 +1,8 @@
 // backend/controllers/auth.controller.js
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import sequelize from "../config/db.js";
+import { QueryTypes } from "sequelize";
 import Usuario from "../Models/Usuario.js";
 
 const JWT_SECRET  = process.env.JWT_SECRET  || "2003";
@@ -9,10 +11,33 @@ const JWT_EXPIRES = process.env.JWT_EXPIRES || "12h";
 const signToken = (payload) =>
   jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
 
+// ---------- SQL de permisos (definida en el mismo archivo) ----------
+const SQL_PERMISOS = `
+  SELECT
+    m.clave,
+    rm.can_create,
+    rm.can_read,
+    rm.can_update,
+    rm.can_delete
+  FROM role_modulos rm
+  JOIN modulos m ON m.id = rm.modulo_id
+  WHERE rm.role_id = :roleId
+  ORDER BY m.clave;
+`;
+
+// helper para traer permisos por rol_id (1=ADMIN, etc.)
+async function getPermisosPorRol(roleId) {
+  const rows = await sequelize.query(SQL_PERMISOS, {
+    replacements: { roleId },
+    type: QueryTypes.SELECT,
+  });
+  return rows ?? [];
+}
+
 /**
  * POST /api/auth/login
  * Body: { correo: string | nombre_usuario, contrasena: string }
- * Res:  { token, usuario: { id, nombre, correo, rol } }
+ * Res:  { token, usuario: { id, nombre, correo, rol }, menus }
  */
 export const login = async (req, res) => {
   try {
@@ -25,46 +50,52 @@ export const login = async (req, res) => {
         .json({ message: "Correo/usuario y contraseña son requeridos" });
     }
 
-    // Buscar primero por correo; si no, por nombre_usuario
-    // OJO: usamos atributos que ya mapeaste en el modelo (id_usuario, nombre_usuario, rol, estado)
-    const attrs = ["id_usuario", "nombre_usuario", "correo", "contrasena", "rol", "estado", "ultimo_login"];
+    const attrs = [
+      "id_usuario",
+      "nombre_usuario",
+      "correo",
+      "contrasena",
+      "rol",           // mapeado a rol_id en DB
+      "estado",
+      "ultimo_login",
+    ];
+
+    // buscar por correo; si no hay, por username
     const byCorreo = await Usuario.findOne({
       where: { correo, estado: true },
       attributes: attrs,
     });
 
-    const byUser =
-      !byCorreo
-        ? await Usuario.findOne({
-            where: { nombre_usuario: correo, estado: true },
-            attributes: attrs,
-          })
-        : null;
+    const byUser = !byCorreo
+      ? await Usuario.findOne({
+          where: { nombre_usuario: correo, estado: true },
+          attributes: attrs,
+        })
+      : null;
 
     const user = byCorreo || byUser;
     if (!user) {
-      return res
-        .status(401)
-        .json({ message: "Usuario o contraseña incorrectos" });
+      return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
     }
 
     const ok = await bcrypt.compare(contrasena, user.contrasena);
     if (!ok) {
-      return res
-        .status(401)
-        .json({ message: "Usuario o contraseña incorrectos" });
+      return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
     }
 
-    // Actualiza último login si existe la columna (en tu tabla existe y se mapea con field)
+    // actualizar último login usando la PK correcta
     try {
-      user.ultimo_login = new Date();
-      await user.save();
+      await Usuario.update(
+        { ultimo_login: new Date() },
+        { where: { id_usuario: user.id_usuario } }
+      );
     } catch (e) {
-      // no interrumpe el login si falla
       console.warn("No se pudo actualizar ultimo_login:", e?.message);
     }
 
-    // En el token enviamos el id mapeado (id_usuario) y el rol (entero → rol_id)
+    // permisos por rol (user.rol es el rol_id entero)
+    const menus = await getPermisosPorRol(user.rol);
+
     const payload = { id: user.id_usuario, rol: user.rol, correo: user.correo };
     const token = signToken(payload);
 
@@ -74,8 +105,9 @@ export const login = async (req, res) => {
         id: user.id_usuario,
         nombre: user.nombre_usuario,
         correo: user.correo,
-        rol: user.rol, // recuerda: es un INTEGER (rol_id). Si necesitas el nombre del rol, habrá que hacer join o resolver aparte.
+        rol: user.rol,
       },
+      menus, // <<--- aquí vienen los módulos/permisos
     });
   } catch (err) {
     console.error("Login error:", err);
@@ -83,14 +115,9 @@ export const login = async (req, res) => {
   }
 };
 
-/**
- * GET /api/auth/perfil
- * Requiere middleware que coloque el payload del JWT en req.user
- * Res: { usuario: { id, nombre, correo, rol } }
- */
 export const perfil = async (req, res) => {
   try {
-    const id = req.user?.id; // viene del token (id_usuario)
+    const id = req.user?.id;
     if (!id) return res.status(401).json({ message: "No autenticado" });
 
     const user = await Usuario.findByPk(id, {
@@ -103,7 +130,7 @@ export const perfil = async (req, res) => {
         id: user.id_usuario,
         nombre: user.nombre_usuario,
         correo: user.correo,
-        rol: user.rol, // entero (rol_id)
+        rol: user.rol,
       },
     });
   } catch (err) {

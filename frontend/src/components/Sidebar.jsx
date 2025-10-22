@@ -22,55 +22,85 @@ const Icon = ({ name, size = 18 }) => {
   return Comp ? <Comp size={size} /> : <FallbackIcon size={size} />;
 };
 
-/* Menú */
+/* Menú base (roles como STRING) */
 const MENU = [
-  { title: "Inicio", items: [{ to: "/", icon: "Home", label: "Home", roles: ["ADMIN","COORD","TSOCIAL","INV","COMPRAS","PROD","STAFF"] }] },
-  { title: "Operación", items: [
-    { to: "/beneficiarios", icon: "Users", label: "Beneficiarios", roles: ["ADMIN","COORD","TSOCIAL"] },
-    { to: "/habitaciones", icon: "Bed", label: "Habitaciones", roles: ["ADMIN","COORD","TSOCIAL"] },
-  ]},
-  { title: "Almacenes", items: [
-    { to: "/inventario/cocina", icon: "Utensils", label: "Cocina", roles: ["ADMIN","STAFF","INV"] },
-    { to: "/bodega", icon: "Boxes", label: "Bodega", roles: ["ADMIN","STAFF"] },
-  ]},
-  { title: "Administración", items: [
-    { to: "/admin/usuarios", icon: "ShieldCheck", label: "Usuarios", roles: ["ADMIN"] },
-  ]},
+  {
+    title: "Inicio",
+    items: [
+      {
+        to: "/",
+        icon: "Home",
+        label: "Home",
+        roles: ["ADMIN", "COORD", "TSOCIAL", "INV", "COMPRAS", "PROD", "STAFF"],
+      },
+    ],
+  },
+  {
+    title: "Operación",
+    items: [
+      { to: "/beneficiarios", icon: "Users", label: "Beneficiarios", roles: ["ADMIN", "COORD", "TSOCIAL"] },
+      { to: "/habitaciones", icon: "Bed", label: "Habitaciones", roles: ["ADMIN", "COORD", "TSOCIAL"] },
+    ],
+  },
+  {
+    title: "Almacenes",
+    items: [
+      { to: "/inventario/cocina", icon: "Utensils", label: "Cocina", roles: ["ADMIN", "STAFF", "INV"] },
+      { to: "/bodega", icon: "Boxes", label: "Bodega", roles: ["ADMIN", "STAFF"] },
+    ],
+  },
+  {
+    title: "Administración",
+    items: [{ to: "/admin/usuarios", icon: "ShieldCheck", label: "Usuarios", roles: ["ADMIN"] }],
+  },
 ];
 
 export default function Sidebar() {
   const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
-  /* 🎨 Paleta OSCURA propia del sidebar (independiente del tema global) */
+  /* 🎨 Paleta OSCURA propia del sidebar */
   const SB = {
-    primary: "#3b82f6",     // Azul suave tipo Tailwind
-    accent:  "#ef4444",     // Rojo brillante
-  
-    bg:       "linear-gradient(180deg, #141820 0%, #171d29 55%, #1a2234 100%)",
+    primary: "#3b82f6",
+    accent: "#ef4444",
+
+    bg: "linear-gradient(180deg, #141820 0%, #171d29 55%, #1a2234 100%)",
     overlay1: "radial-gradient(900px 320px at 20% -10%, rgba(59,130,246,.25), transparent 70%)",
     overlay2: "radial-gradient(900px 220px at 85% 0%, rgba(239,68,68,.08), transparent 70%)",
-  
-    item:       "linear-gradient(145deg, rgba(255,255,255,.05), rgba(255,255,255,.02))",
+
+    item: "linear-gradient(145deg, rgba(255,255,255,.05), rgba(255,255,255,.02))",
     itemActive: "linear-gradient(145deg, rgba(59,130,246,.28), rgba(59,130,246,.12))",
-  
-    border:   "rgba(160,170,190,.2)",
-    text:     "#e4e9f5",
-    muted:    "#9ca3af",
-    shadow:   "0 12px 36px rgba(0,0,0,.45)"
+
+    border: "rgba(160,170,190,.2)",
+    text: "#e4e9f5",
+    muted: "#9ca3af",
+    shadow: "0 12px 36px rgba(0,0,0,.45)",
   };
-  
 
-  
-  
+  /* Mapa de rol numérico -> string */
+  const ROLE_MAP = {
+    1: "ADMIN",
+    2: "STAFF",
+    3: "COORD",
+    4: "TSOCIAL",
+    5: "INV",
+    6: "COMPRAS",
+    7: "PROD",
+    8: "LECTOR",
+  };
 
+  const roleCode = ROLE_MAP[user?.rol] || String(user?.rol || "");
+  const isAdmin = roleCode === "ADMIN";
+
+  /* Filtrado de menú (admin ve todo) */
   const groups = useMemo(() => {
-    const role = user?.rol;
-    return MENU.map(g => ({
-      ...g,
-      items: g.items.filter(it => !it.roles || it.roles.includes(role))
-    })).filter(g => g.items.length > 0);
-  }, [user]);
+    return MENU
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((it) => isAdmin || !it.roles || it.roles.includes(roleCode)),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [roleCode, isAdmin]);
 
   /* shimmer posicional */
   const onMouseMove = useCallback((e) => {
@@ -95,7 +125,7 @@ export default function Sidebar() {
         background: `${SB.bg}, ${SB.overlay1}, ${SB.overlay2}`,
         backgroundBlendMode: "normal, overlay, overlay",
         border: "none",
-        borderRadius: 0,    
+        // (Quitamos el borderRadius duplicado para evitar el warning de Vite)
         color: SB.text,
         boxShadow: "none",
         position: "relative",
@@ -121,7 +151,10 @@ export default function Sidebar() {
           aria-hidden
           style={{
             position: "absolute",
-            top: 0, left: -80, width: 80, height: "100%",
+            top: 0,
+            left: -80,
+            width: 80,
+            height: "100%",
             background: "linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent)",
             transform: "skewX(-20deg)",
             animation: "glint 4s linear infinite",
@@ -129,26 +162,33 @@ export default function Sidebar() {
         />
         <div
           style={{
-            width: 42, height: 42, borderRadius: "50%",
+            width: 42,
+            height: 42,
+            borderRadius: "50%",
             border: `2px solid ${SB.primary}`,
             background: "#0e162c",
             boxShadow: "0 0 14px rgba(11,77,170,.28)",
             flex: "0 0 auto",
             overflow: "hidden",
-            display: "grid", placeItems: "center"
+            display: "grid",
+            placeItems: "center",
           }}
         >
-          <img src="/images/luz.png" alt="Luz y Vida" style={{ width: "88%", height: "88%", objectFit: "contain" }} />
+          <img
+            src="/images/luz.png"
+            alt="Luz y Vida"
+            style={{ width: "88%", height: "88%", objectFit: "contain" }}
+          />
         </div>
         {!collapsed && (
           <div style={{ lineHeight: 1 }}>
-            <div style={{ fontWeight: 900, color: SB.text, letterSpacing: .4 }}>Luz & Vida</div>
+            <div style={{ fontWeight: 900, color: SB.text, letterSpacing: 0.4 }}>Luz & Vida</div>
             <div style={{ fontSize: 12, color: SB.muted }}>Gestión Administrativa</div>
           </div>
         )}
         <button
           className="btn btn-ghost"
-          onClick={() => setCollapsed(v => !v)}
+          onClick={() => setCollapsed((v) => !v)}
           style={{ marginLeft: "auto", color: SB.muted, fontWeight: 800 }}
           title={collapsed ? "Expandir" : "Colapsar"}
         >
@@ -161,7 +201,15 @@ export default function Sidebar() {
         {groups.map((group) => (
           <div key={group.title} style={{ display: "grid", gap: 6 }}>
             {!collapsed && (
-              <div style={{ fontSize: 11, color: SB.muted, padding: "0 .4rem", fontWeight: 800, letterSpacing: .6 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: SB.muted,
+                  padding: "0 .4rem",
+                  fontWeight: 800,
+                  letterSpacing: 0.6,
+                }}
+              >
                 {group.title.toUpperCase()}
               </div>
             )}
@@ -188,24 +236,41 @@ export default function Sidebar() {
                         border: `1px solid ${SB.border}`,
                         background: isActive ? SB.itemActive : SB.item,
                         transition: "all .25s ease",
-                        boxShadow: isActive ? "0 8px 18px rgba(11,77,170,.34)" : "0 1px 5px rgba(0,0,0,.35)",
+                        boxShadow: isActive
+                          ? "0 8px 18px rgba(11,77,170,.34)"
+                          : "0 1px 5px rgba(0,0,0,.35)",
                         position: "relative",
                         overflow: "hidden",
                       }}
                     >
-                      <div style={{
-                        width: 4, height: 28, borderRadius: 4,
-                        background: isActive ? SB.primary : "transparent",
-                        transition: "background .25s ease",
-                      }} />
-                      <div style={{
-                        display: "grid", placeItems: "center", width: 22,
-                        color: isActive ? SB.primary : SB.text
-                      }}>
+                      <div
+                        style={{
+                          width: 4,
+                          height: 28,
+                          borderRadius: 4,
+                          background: isActive ? SB.primary : "transparent",
+                          transition: "background .25s ease",
+                        }}
+                      />
+                      <div
+                        style={{
+                          display: "grid",
+                          placeItems: "center",
+                          width: 22,
+                          color: isActive ? SB.primary : SB.text,
+                        }}
+                      >
                         <Icon name={it.icon} />
                       </div>
                       {!collapsed && (
-                        <span style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
                           {it.label}
                         </span>
                       )}
@@ -214,9 +279,13 @@ export default function Sidebar() {
                         aria-hidden
                         className="sb-hover"
                         style={{
-                          position: "absolute", inset: 0,
-                          background: "radial-gradient(600px 100px at var(--x, 0px) var(--y, 0px), rgba(255,255,255,.08), transparent 40%)",
-                          opacity: 0, transition: "opacity .25s ease", pointerEvents: "none",
+                          position: "absolute",
+                          inset: 0,
+                          background:
+                            "radial-gradient(600px 100px at var(--x, 0px) var(--y, 0px), rgba(255,255,255,.08), transparent 40%)",
+                          opacity: 0,
+                          transition: "opacity .25s ease",
+                          pointerEvents: "none",
                         }}
                       />
                     </div>
@@ -229,30 +298,43 @@ export default function Sidebar() {
       </nav>
 
       {/* PIE */}
-      <div style={{ marginTop: "auto", opacity: .96 }}>
+      <div style={{ marginTop: "auto", opacity: 0.96 }}>
         <div
           style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: ".55rem .6rem", borderRadius: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: ".55rem .6rem",
+            borderRadius: 12,
             border: `1px solid ${SB.border}`,
-            background: "linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04))",
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04))",
           }}
         >
-          <div style={{
-            width: 30, height: 30, borderRadius: "50%",
-            background: "#0f1a30", border: `2px solid ${SB.primary}`,
-            display: "grid", placeItems: "center", overflow: "hidden",
-          }}>
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: "50%",
+              background: "#0f1a30",
+              border: `2px solid ${SB.primary}`,
+              display: "grid",
+              placeItems: "center",
+              overflow: "hidden",
+            }}
+          >
             <img src="/images/luz.png" alt="" style={{ width: "85%", height: "85%" }} />
           </div>
           {!collapsed && (
             <div style={{ fontSize: 12, lineHeight: 1.15 }}>
-              <div style={{ fontWeight: 700, color: SB.text }}>{user?.nombre_usuario || "Usuario"}</div>
-              <div style={{ color: SB.muted }}>{user?.rol || "—"}</div>
+              <div style={{ fontWeight: 700, color: SB.text }}>
+                {user?.nombre_usuario || "Usuario"}
+              </div>
+              <div style={{ color: SB.muted }}>{roleCode || "—"}</div>
             </div>
           )}
           {!collapsed && (
-            <div style={{ marginLeft: "auto", opacity: .85, color: SB.muted }}>
+            <div style={{ marginLeft: "auto", opacity: 0.85, color: SB.muted }}>
               <Icon name="Settings" />
             </div>
           )}
