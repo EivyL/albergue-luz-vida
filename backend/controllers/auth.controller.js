@@ -2,42 +2,42 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import sequelize from "../config/db.js";
-import { QueryTypes } from "sequelize";
 import Usuario from "../Models/Usuario.js";
 
 const JWT_SECRET  = process.env.JWT_SECRET  || "2003";
 const JWT_EXPIRES = process.env.JWT_EXPIRES || "12h";
 
-const signToken = (payload) =>
-  jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+/** Firma el JWT con id, rol y permisos (si hay) */
+function signToken(payload) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+}
 
-// ---------- SQL de permisos (definida en el mismo archivo) ----------
-const SQL_PERMISOS = `
-  SELECT
-    m.clave,
-    rm.can_create,
-    rm.can_read,
-    rm.can_update,
-    rm.can_delete
-  FROM role_modulos rm
-  JOIN modulos m ON m.id = rm.modulo_id
-  WHERE rm.role_id = :roleId
-  ORDER BY m.clave;
-`;
-
-// helper para traer permisos por rol_id (1=ADMIN, etc.)
+/** Lee permisos por rol desde role_modulos/modulos (si existen). Devuelve [] si no hay tablas o falla. */
 async function getPermisosPorRol(roleId) {
-  const rows = await sequelize.query(SQL_PERMISOS, {
-    replacements: { roleId },
-    type: QueryTypes.SELECT,
-  });
-  return rows ?? [];
+  const sql = `
+    SELECT m.clave AS clave,
+           rm.can_create,
+           rm.can_read,
+           rm.can_update,
+           rm.can_delete
+    FROM role_modulos rm
+    JOIN modulos m ON m.id = rm.modulo_id
+    WHERE rm.role_id = :roleId
+    ORDER BY m.clave;
+  `;
+  try {
+    const [rows] = await sequelize.query(sql, { replacements: { roleId } });
+    return rows || [];
+  } catch {
+    // Si la tabla aún no existe (ambiente local) no rompemos el login
+    return [];
+  }
 }
 
 /**
  * POST /api/auth/login
  * Body: { correo: string | nombre_usuario, contrasena: string }
- * Res:  { token, usuario: { id, nombre, correo, rol }, menus }
+ * Res:  { token, usuario: { id, nombre_usuario, correo, rol, perms } }
  */
 export const login = async (req, res) => {
   try {
@@ -45,69 +45,51 @@ export const login = async (req, res) => {
     correo = (correo || "").trim();
 
     if (!correo || !contrasena) {
-      return res
-        .status(400)
-        .json({ message: "Correo/usuario y contraseña son requeridos" });
+      return res.status(400).json({ message: "Correo/usuario y contraseña son requeridos" });
     }
 
-    const attrs = [
-      "id_usuario",
-      "nombre_usuario",
-      "correo",
-      "contrasena",
-      "rol",           // mapeado a rol_id en DB
-      "estado",
-      "ultimo_login",
-    ];
+    // Campos mapeados en tu modelo (id_usuario -> field 'id', nombre_usuario -> 'nombre', rol -> 'rol_id', etc.)
+    const attrs = ["id_usuario", "nombre_usuario", "correo", "contrasena", "rol", "estado", "ultimo_login"];
 
-    // buscar por correo; si no hay, por username
-    const byCorreo = await Usuario.findOne({
-      where: { correo, estado: true },
-      attributes: attrs,
-    });
-
-    const byUser = !byCorreo
-      ? await Usuario.findOne({
-          where: { nombre_usuario: correo, estado: true },
-          attributes: attrs,
-        })
+    // Primero por correo; si no, por nombre de usuario
+    const byCorreo = await Usuario.findOne({ where: { correo, estado: true }, attributes: attrs });
+    const byUser   = !byCorreo
+      ? await Usuario.findOne({ where: { nombre_usuario: correo, estado: true }, attributes: attrs })
       : null;
 
     const user = byCorreo || byUser;
-    if (!user) {
-      return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
-    }
+    if (!user) return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
 
     const ok = await bcrypt.compare(contrasena, user.contrasena);
-    if (!ok) {
-      return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
-    }
+    if (!ok) return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
 
-    // actualizar último login usando la PK correcta
+    // Permisos por rol (si existen tablas)
+    const perms = await getPermisosPorRol(user.rol);
+
+    // Actualiza último login (si el PK está bien mapeado no fallará)
     try {
-      await Usuario.update(
-        { ultimo_login: new Date() },
-        { where: { id_usuario: user.id_usuario } }
-      );
+      user.ultimo_login = new Date();
+      await user.save(); // update by PK
     } catch (e) {
       console.warn("No se pudo actualizar ultimo_login:", e?.message);
     }
 
-    // permisos por rol (user.rol es el rol_id entero)
-    const menus = await getPermisosPorRol(user.rol);
-
-    const payload = { id: user.id_usuario, rol: user.rol, correo: user.correo };
-    const token = signToken(payload);
+    const token = signToken({
+      id: user.id_usuario,
+      rol: user.rol,         // entero (rol_id)
+      perms,                 // arreglo de permisos por módulo
+      correo: user.correo,
+    });
 
     return res.json({
       token,
       usuario: {
         id: user.id_usuario,
-        nombre: user.nombre_usuario,
+        nombre_usuario: user.nombre_usuario,
         correo: user.correo,
         rol: user.rol,
+        perms,
       },
-      menus, // <<--- aquí vienen los módulos/permisos
     });
   } catch (err) {
     console.error("Login error:", err);
@@ -115,9 +97,13 @@ export const login = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/auth/perfil
+ * Requiere requireAuth. Devuelve datos del usuario y, si el token traía perms, los reenvía.
+ */
 export const perfil = async (req, res) => {
   try {
-    const id = req.user?.id;
+    const id = req.user?.id; // viene del token (id_usuario)
     if (!id) return res.status(401).json({ message: "No autenticado" });
 
     const user = await Usuario.findByPk(id, {
@@ -125,12 +111,18 @@ export const perfil = async (req, res) => {
     });
     if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
 
+    // Reutilizamos permisos que ya venían en el token; si quieres, podrías recalcularlos con getPermisosPorRol(user.rol)
+    const perms = Array.isArray(req.user?.perms) ? req.user.perms : [];
+
     return res.json({
       usuario: {
         id: user.id_usuario,
-        nombre: user.nombre_usuario,
+        nombre_usuario: user.nombre_usuario,
         correo: user.correo,
         rol: user.rol,
+        estado: user.estado,
+        ultimo_login: user.ultimo_login,
+        perms,
       },
     });
   } catch (err) {

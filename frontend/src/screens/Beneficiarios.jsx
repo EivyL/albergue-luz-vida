@@ -30,6 +30,21 @@ const Field = ({ label, children }) => (
   </div>
 );
 
+const Badge = ({ children, tone = "default", title }) => {
+  const tones = {
+    default: { bg: "rgba(15,23,42,.06)", bd: "rgba(15,23,42,.15)", fg: "#0f172a" },
+    ok:      { bg: "rgba(16,185,129,.10)", bd: "rgba(16,185,129,.35)", fg: "#065f46" },
+    warn:    { bg: "rgba(245,158,11,.10)", bd: "rgba(245,158,11,.35)", fg: "#78350f" },
+    info:    { bg: "rgba(59,130,246,.10)", bd: "rgba(59,130,246,.35)", fg: "#1d4ed8" },
+  }[tone];
+  return (
+    <span title={title} className="badge" style={{
+      background: tones.bg, borderColor: tones.bd, color: tones.fg,
+      display: 'inline-flex', alignItems: 'center', gap: 6
+    }}>● {children}</span>
+  );
+};
+
 /* ===== Utils ===== */
 const today = () => new Date().toISOString().slice(0, 10);
 const toIsoDate = (v) => (v ? new Date(v).toISOString().slice(0, 10) : "");
@@ -46,7 +61,7 @@ const calcAge = (birth) => {
 };
 
 /* Últimos N meses como opciones YYYY-MM */
-const buildMonthOptions = (n = 18) => {
+const buildMonthOptions = (n = 24) => {
   const out = [{ value: "ALL", label: "Todos los meses" }];
   const d = new Date();
   d.setDate(1);
@@ -82,14 +97,21 @@ export default function Beneficiarios() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
-  /* crear/editar rápido */
+  /* crear/editar rápido
+     + NUEVOS CAMPOS: religion ("C" | "E"), y requerimientos de comida (3 checkboxes)
+  */
   const [form, setForm] = useState({
     nombre: "", apellido: "", sexo: "M",
     documento: "", telefono: "",
     direccion: "", programa: "",
     fecha_nacimiento: "", fecha_ingreso: today(),
     estado: true, observaciones: "",
-    id_usuario: userId
+    // nuevos
+    religion: "",                 // "C" (Católica) | "E" (Evangélica) | "" (no consignado)
+    requiere_desayuno: false,
+    requiere_almuerzo: false,
+    requiere_cena: false,
+    id_usuario: userId,
   });
   const [editing, setEditing] = useState(null);
 
@@ -138,7 +160,11 @@ export default function Beneficiarios() {
       documento: "", telefono: "", direccion: "", programa: "",
       fecha_nacimiento: "", fecha_ingreso: today(),
       estado: true, observaciones: "",
-      id_usuario: userId
+      religion: "",
+      requiere_desayuno: false,
+      requiere_almuerzo: false,
+      requiere_cena: false,
+      id_usuario: userId,
     });
   };
 
@@ -146,9 +172,10 @@ export default function Beneficiarios() {
     if (!form.nombre || !form.apellido) return alert("Nombre y apellido son requeridos.");
     const payload = {
       ...form,
+      // normaliza fechas
       fecha_ingreso: toIsoDate(form.fecha_ingreso) || today(),
       fecha_nacimiento: form.fecha_nacimiento ? toIsoDate(form.fecha_nacimiento) : null,
-      id_usuario: form.id_usuario ?? userId
+      id_usuario: form.id_usuario ?? userId,
     };
     try {
       if (editing) {
@@ -180,7 +207,11 @@ export default function Beneficiarios() {
       fecha_ingreso: toIsoDate(row.fecha_ingreso) || today(),
       estado: row.estado ?? true,
       observaciones: row.observaciones ?? "",
-      id_usuario: row.id_usuario ?? userId
+      religion: row.religion ?? "",
+      requiere_desayuno: !!row.requiere_desayuno,
+      requiere_almuerzo: !!row.requiere_almuerzo,
+      requiere_cena: !!row.requiere_cena,
+      id_usuario: row.id_usuario ?? userId,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -233,7 +264,8 @@ export default function Beneficiarios() {
   <table>
     <thead><tr>
       <th>#</th><th>Nombre</th><th>Sexo</th><th>Edad</th><th>Documento</th>
-      <th>Teléfono</th><th>Programa</th><th>Ingreso</th><th>Estado</th>
+      <th>Teléfono</th><th>Programa</th><th>Ingreso</th><th>Religión</th>
+      <th>Alimentación</th><th>Estado</th>
     </tr></thead>
     <tbody>
       ${items.map((r, i) => `
@@ -246,6 +278,8 @@ export default function Beneficiarios() {
           <td>${r.telefono ?? "—"}</td>
           <td>${r.programa ?? "—"}</td>
           <td>${toIsoDate(r.fecha_ingreso) || "—"}</td>
+          <td>${r.religion || "—"}</td>
+          <td>${[r.requiere_desayuno?"D":null,r.requiere_almuerzo?"A":null,r.requiere_cena?"C":null].filter(Boolean).join("/") || "—"}</td>
           <td>${r.estado ? "Activo" : "Inactivo"}</td>
         </tr>
       `).join("")}
@@ -260,12 +294,15 @@ export default function Beneficiarios() {
 
   /* ===== Render ===== */
   return (
-    <div className="container section" ref={printRef}>
+    <div className="container section" ref={printRef} style={{ maxWidth: 1200, marginInline: 'auto' }}>
       {/* Encabezado */}
-      <div className="panel" style={{ padding: 16 }}>
-        <div className="toolbar" style={{ justifyContent: "space-between" }}>
-          <h1 className="h1">Beneficiarios</h1>
-          <div className="toolbar">
+      <div className="panel" style={{ padding: 16, border: '1px solid var(--lv-border)', borderRadius: 12 }}>
+        <div className="toolbar" style={{ justifyContent: "space-between", gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <h1 className="h1" style={{ margin: 0 }}>Beneficiarios</h1>
+            <div className="muted" style={{ fontSize: 12 }}>Registro y control institucional</div>
+          </div>
+          <div className="toolbar" style={{ gap: 8, flexWrap: 'wrap' }}>
             {/* Tabs Sexo */}
             <div className="tabs">
               <PillTab active={sexo === "H"} onClick={() => { setSexo("H"); setPage(1); }}>Hombres</PillTab>
@@ -306,6 +343,12 @@ export default function Beneficiarios() {
               {[10, 20, 50].map((n) => <option key={n} value={n}>{n}/pág</option>)}
             </select>
 
+            {/* Vista */}
+            <select className="select" value={view} onChange={(e) => setView(e.target.value)} style={{ width: 140 }}>
+              <option value="tabla">Tabla</option>
+              <option value="cards">Tarjetas</option>
+              <option value="compact">Compacta</option>
+            </select>
 
             {/* Imprimir (por mes) */}
             <button className="btn btn-outline" onClick={printList}>🖨️ Imprimir mes</button>
@@ -313,7 +356,7 @@ export default function Beneficiarios() {
         </div>
 
         {/* KPIs */}
-        <div className="toolbar" style={{ marginTop: 10 }}>
+        <div className="toolbar" style={{ marginTop: 10, gap: 10, flexWrap: 'wrap' }}>
           <Stat label="Total" value={kpis.total} tone="kpi-total" />
           <Stat label="Activos" value={kpis.activos} tone="kpi-ok" />
           <Stat label="Inactivos" value={kpis.inactivos} tone="kpi-warn" />
@@ -322,7 +365,7 @@ export default function Beneficiarios() {
       </div>
 
       {/* Registro rápido */}
-      <div className="card elevate">
+      <div className="card elevate" style={{ border: '1px solid var(--lv-border)', borderRadius: 12 }}>
         <div className="toolbar" style={{ justifyContent: "space-between" }}>
           <div className="h2">Registro rápido</div>
           {editing ? (
@@ -374,6 +417,28 @@ export default function Beneficiarios() {
               <label htmlFor="chkEstado" style={{ cursor: "pointer" }}>Activo</label>
             </div>
           </Field>
+
+          {/* NUEVOS CAMPOS */}
+          <Field label="Religión (C/E)">
+            <select className="select" name="religion" value={form.religion} onChange={onChange} title="C = Católica, E = Evangélica">
+              <option value="">No consignado</option>
+              <option value="C">C (Católica)</option>
+              <option value="E">E (Evangélica)</option>
+            </select>
+          </Field>
+          <Field label="Alimentación requerida">
+            <div className="toolbar" style={{ flexWrap:'wrap', gap: 12 }}>
+              <label className="checkbox">
+                <input type="checkbox" name="requiere_desayuno" checked={!!form.requiere_desayuno} onChange={onChange} /> Desayuno
+              </label>
+              <label className="checkbox">
+                <input type="checkbox" name="requiere_almuerzo" checked={!!form.requiere_almuerzo} onChange={onChange} /> Almuerzo
+              </label>
+              <label className="checkbox">
+                <input type="checkbox" name="requiere_cena" checked={!!form.requiere_cena} onChange={onChange} /> Cena
+              </label>
+            </div>
+          </Field>
         </div>
 
         <div style={{ marginTop: 12 }}>
@@ -383,7 +448,7 @@ export default function Beneficiarios() {
       </div>
 
       {/* Resultados */}
-      <div className="panel" style={{ padding: 0 }}>
+      <div className="panel" style={{ padding: 0, border: '1px solid var(--lv-border)', borderRadius: 12 }}>
         <div style={{ padding: 12, borderBottom: "1px solid var(--lv-border)" }}>
           <div className="h2">Listado</div>
         </div>
@@ -402,6 +467,8 @@ export default function Beneficiarios() {
                   <th>Teléfono</th>
                   <th>Programa</th>
                   <th>Ingreso</th>
+                  <th>Religión</th>
+                  <th>Alimentación</th>
                   <th>Estado</th>
                   <th style={{ textAlign: "right" }}>Acciones</th>
                 </tr>
@@ -420,6 +487,15 @@ export default function Beneficiarios() {
                     <td>{r.telefono || "—"}</td>
                     <td>{r.programa || "—"}</td>
                     <td>{toIsoDate(r.fecha_ingreso) || "—"}</td>
+                    <td>{r.religion || "—"}</td>
+                    <td>
+                      <div className="toolbar" style={{ gap: 6, flexWrap:'wrap' }}>
+                        {r.requiere_desayuno && <Badge tone="info" title="Requiere desayuno">D</Badge>}
+                        {r.requiere_almuerzo && <Badge tone="ok" title="Requiere almuerzo">A</Badge>}
+                        {r.requiere_cena && <Badge tone="warn" title="Requiere cena">C</Badge>}
+                        {!r.requiere_desayuno && !r.requiere_almuerzo && !r.requiere_cena && <span className="muted">—</span>}
+                      </div>
+                    </td>
                     <td>
                       {r.estado
                         ? <span className="badge badge-success">Activo</span>
@@ -433,15 +509,15 @@ export default function Beneficiarios() {
                     </td>
                   </tr>
                 ))}
-                {loading && (<tr><td colSpan={10} className="muted">Cargando…</td></tr>)}
-                {!loading && items.length === 0 && (<tr><td colSpan={10} className="muted">Sin resultados</td></tr>)}
+                {loading && (<tr><td colSpan={12} className="muted">Cargando…</td></tr>)}
+                {!loading && items.length === 0 && (<tr><td colSpan={12} className="muted">Sin resultados</td></tr>)}
               </tbody>
             </table>
           </div>
         )}
 
         {view === "cards" && (
-          <div style={{ display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", padding:12 }}>
+          <div style={{ display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))", padding:12 }}>
             {loading && <div className="muted">Cargando…</div>}
             {!loading && items.map((r, i) => (
               <div key={r.id_beneficiario} className="card" style={{ padding:12 }}>
@@ -454,11 +530,17 @@ export default function Beneficiarios() {
                 <div className="muted" style={{ fontSize:12, marginTop:6 }}>
                   Doc: {r.documento || "—"} · Programa: {r.programa || "—"}
                 </div>
-                <div style={{ marginTop:8, display:"flex", gap:8 }}>
+                <div style={{ marginTop:8, display:"flex", gap:8, flexWrap:'wrap' }}>
+                  <Badge tone="default">{toIsoDate(r.fecha_ingreso) || "—"}</Badge>
+                  {r.religion && <Badge tone="info" title="Religión">{r.religion}</Badge>}
+                  {r.requiere_desayuno && <Badge tone="info">D</Badge>}
+                  {r.requiere_almuerzo && <Badge tone="ok">A</Badge>}
+                  {r.requiere_cena && <Badge tone="warn">C</Badge>}
+                </div>
+                <div style={{ marginTop:8 }}>
                   {r.estado
                     ? <span className="badge badge-success">Activo</span>
                     : <span className="badge badge-warning">Inactivo</span>}
-                  <span className="badge">{toIsoDate(r.fecha_ingreso) || "—"}</span>
                 </div>
                 <div className="toolbar" style={{ marginTop:10, justifyContent:"flex-end" }}>
                   <button className="btn btn-ghost" onClick={() => onEdit(r)}>Editar</button>
@@ -487,7 +569,7 @@ export default function Beneficiarios() {
                     {r.nombre} {r.apellido} <span className="muted">• {r.programa || "—"}</span>
                   </div>
                   <div className="muted" style={{ fontSize:12 }}>
-                    {r.sexo === "H" ? "Hombre" : "Mujer"} · {calcAge(r.fecha_nacimiento)} · Ingreso: {toIsoDate(r.fecha_ingreso) || "—"}
+                    {r.sexo === "H" ? "Hombre" : "Mujer"} · {calcAge(r.fecha_nacimiento)} · Ingreso: {toIsoDate(r.fecha_ingreso) || "—"} · Rel: {r.religion || "—"} · Alim: {[r.requiere_desayuno?"D":null,r.requiere_almuerzo?"A":null,r.requiere_cena?"C":null].filter(Boolean).join("/") || "—"}
                   </div>
                 </div>
                 <div className="toolbar">

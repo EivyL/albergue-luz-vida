@@ -14,6 +14,7 @@ import habitacionesRouter from "./Routers/habitaciones.js";
 import inventarioCocinaRoutes from "./Routers/inventarioCocina.js";
 import bodegaRouter from "./Routers/bodega.js";
 
+
 const app = express();
 
 // ====== CORS ======

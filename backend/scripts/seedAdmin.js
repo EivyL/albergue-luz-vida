@@ -4,8 +4,8 @@ import bcrypt from "bcryptjs";
 import sequelize from "../config/db.js";   // 👈 import default (no llaves)
 import Usuario from "../Models/Usuario.js";
 
-(async () => {
-  const correo = "admin@albergue.test";
+(async () => {adm
+  const correo = "in@albergue.test";
   const nombre = "admin";
   const plain  = "Admin123*";
 
